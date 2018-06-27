@@ -1,15 +1,24 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"time"
 )
 
 func main() {
 
-	fmt.Println("Starting Program...")
+	log.Println("Starting Program...")
 
-	go OpenChannel(srcRabbitConn)
+	go func() {
+		for {
+			OpenChannel(srcRabbitConn)
+			log.Println("Channel Closed...")
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
 	forever := make(chan bool)
 	<-forever
@@ -17,6 +26,31 @@ func main() {
 }
 func processPayload(payload []byte, route string) {
 
-	s := route + "\n" + string(payload[0:]) + "\n"
-	fmt.Println(s)
+	//s := route + "\n" + string(payload[0:]) + "\n"
+	//fmt.Println(s)
+	log.Println(route)
+	printJSON(string(payload[0:]))
+}
+
+func printJSON(str string) {
+
+	jsonMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(str), &jsonMap)
+	if err != nil {
+		panic(err)
+	}
+	dumpMap("", jsonMap)
+
+}
+
+func dumpMap(space string, m map[string]interface{}) {
+	for k, v := range m {
+		if mv, ok := v.(map[string]interface{}); ok {
+			fmt.Printf("{ \"%v\": \n", k)
+			dumpMap(space+"\t", mv)
+			fmt.Printf("}\n")
+		} else {
+			fmt.Printf("%v %v : %v\n", space, k, v)
+		}
+	}
 }

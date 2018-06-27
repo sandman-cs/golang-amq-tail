@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
+	"os"
 	"time"
 
-	"github.com/sandman-cs/core"
 	"github.com/streadway/amqp"
 )
 
@@ -26,17 +27,18 @@ var (
 
 func init() {
 
-	conf.ServerName = "Just Playing"
-	conf.SrcRoute = "*"
+	conf.ServerName, _ = os.Hostname()
+	conf.SrcRoute = "#"
 
 	//Load Configuration Data
 	dat, _ := ioutil.ReadFile("conf.json")
 	err := json.Unmarshal(dat, &conf)
-	core.SyslogCheckError(err)
+	if err != nil {
+		log.Println(err)
+	}
 
 	// create the rabbitmq error channel
 	srcRabbitCloseError = make(chan *amqp.Error)
-	dstRabbitCloseError = make(chan *amqp.Error)
 
 	srcAmqpURI := "amqp://" + conf.SrcBrokerUsr + ":" + conf.SrcBrokerPwd + "@" + conf.SrcBroker + conf.SrcBrokerVhost
 
@@ -47,7 +49,7 @@ func init() {
 	// an error and thus calling the error callback
 	srcRabbitCloseError <- amqp.ErrClosed
 	for srcRabbitConn == nil {
-		core.SendMessage("Waiting for Source RabbitMQ Connection...")
+		log.Println("Waiting for Source RabbitMQ Connection...")
 		time.Sleep(1 * time.Second)
 	}
 

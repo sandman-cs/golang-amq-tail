@@ -2,18 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
-	"github.com/sandman-cs/core"
-	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 )
 
 var (
 	srcRabbitConn       *amqp.Connection
 	srcRabbitCloseError chan *amqp.Error
-	dstRabbitConn       *amqp.Connection
-	dstRabbitCloseError chan *amqp.Error
 	pubError            int
 	pubSuccess          int
 	recCount            int
@@ -27,6 +24,7 @@ func connectToRabbitMQ(uri string) *amqp.Connection {
 		conn, err := amqp.Dial(uri)
 
 		if err == nil {
+			log.Println("Connected to Broker...")
 			return conn
 		}
 
@@ -45,7 +43,7 @@ func srcRabbitConnector(uri string) {
 	for {
 		srcRabbitErr = <-srcRabbitCloseError
 		if srcRabbitErr != nil {
-			core.SendMessage("Connecting to Source RabbitMQ")
+			log.Println("Connecting to Source RabbitMQ")
 			srcRabbitConn = connectToRabbitMQ(uri)
 			srcRabbitCloseError = make(chan *amqp.Error)
 			srcRabbitConn.NotifyClose(srcRabbitCloseError)
@@ -53,34 +51,23 @@ func srcRabbitConnector(uri string) {
 	}
 }
 
-// re-establish the connection to RabbitMQ in case
-// the connection has died
-//
-func dstRabbitConnector(uri string) {
-	var dstRabbitErr *amqp.Error
-
-	for {
-		dstRabbitErr = <-dstRabbitCloseError
-		if dstRabbitErr != nil {
-			core.SendMessage(fmt.Sprintln("Connecting to Destination RabbitMQ: ", uri))
-			dstRabbitConn = connectToRabbitMQ(uri)
-			dstRabbitCloseError = make(chan *amqp.Error)
-			dstRabbitConn.NotifyClose(dstRabbitCloseError)
-			core.SendMessage("Connection to dst established...")
-		}
-	}
-}
-
 //OpenChannel Opens communication Channel to Queue
 func OpenChannel(conn *amqp.Connection) {
 
+	log.Println("Opening Channel to Broker...")
+
 	//Open channel to broker
 	ch, err := conn.Channel()
-	core.FailOnError(err, "Failed to open a channel")
+	if err != nil {
+		log.Println("Failed to open a channel: ", err)
+		return
+	}
 	ch.Qos(10, 0, true)
 	defer ch.Close()
 
 	//Declare Queue
+
+	log.Println("Declaring Queue")
 
 	q, err := ch.QueueDeclare(
 		"",    // name
@@ -90,6 +77,8 @@ func OpenChannel(conn *amqp.Connection) {
 		false, // no-wait
 		nil,   // arguments
 	)
+
+	log.Println("Binding to queue: ", q.Name)
 
 	err = ch.QueueBind(
 		q.Name,                 // queue name
@@ -112,7 +101,7 @@ func OpenChannel(conn *amqp.Connection) {
 		log.Println("Failed to register a consumer")
 		return
 	}
-	fmt.Println("Rabbit-listener instance started.")
+	log.Println("Rabbit-listener instance started.\n\n ")
 
 	forever := make(chan bool)
 
@@ -120,13 +109,13 @@ func OpenChannel(conn *amqp.Connection) {
 		for d := range msgs {
 			processPayload(d.Body, d.RoutingKey)
 			if err != nil {
-				core.SyslogCheckError(err)
+				fmt.Println(err)
 				d.Ack(true)
 			} else {
 				d.Ack(false)
 			}
 		}
-		core.SyslogSendJSON("Error, Lost AMQP Connection.")
+		log.Println("Error, Lost AMQP Connection.")
 		forever <- false
 	}()
 
