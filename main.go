@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,9 +21,13 @@ func main() {
 		}
 	}()
 
-	forever := make(chan bool)
-	<-forever
-	os.Exit(0)
+	for {
+		time.Sleep(time.Second * 1)
+		reader := bufio.NewReader(os.Stdin)
+		text, _ := reader.ReadString('\n')
+		fmt.Print(text)
+	}
+
 }
 func processPayload(payload []byte, route string) {
 
